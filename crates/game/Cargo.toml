@@ -1,0 +1,7 @@
+[package]
+name = "pting-game"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+pting-hal = { version = "0.1.0", path = "../hal" }
