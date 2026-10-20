@@ -33,22 +33,22 @@ Build a framework to develop, test, release, and auto-update a custom OS for a R
 
 ## 0.3 Decisions so far
 
-| Item | Decision |
-|---|---|
-| Target board | Raspberry Pi Zero 2 W (aarch64, 512 MB RAM, WiFi/BT) |
-| Dev board | Raspberry Pi 3 (same Cortex-A53 family). Board is a build variable: `BOARD=rpi3 \| rpizero2w` |
-| Boot chain | Pi ROM and GPU firmware (closed, unchangeable), then **U-Boot**, then Linux. The "loader" is U-Boot plus a LOADER-style command layer. |
-| Fallback mechanism | U-Boot `bootcount` / `bootlimit` / `altbootcmd` |
-| OS build system | Buildroot, run inside a Podman/Docker container |
-| Update mechanism | RAUC (or SWUpdate, to be confirmed in Part A/H) for signed bundles and atomic slot writes. The Rust app is the scheduler/downloader. |
-| Update host | GitHub Releases (public repo). Stable URL: `releases/latest/download/manifest.json`. Beta channel via a rolling tag such as `channel-beta`. |
-| Language | Rust, cross-compiled to `aarch64-unknown-linux-gnu` |
-| Projectile | Airsoft 6 mm BBs |
-| Targets | 10 holes (2×5), configurable `N`. Each is a steel can on the back of a wood face. |
-| Hit sensing | One piezo disc per can, read through MCP3008 ADC(s) over SPI. Replaces the original single-microphone idea, because a mic hears the gun shot and cannot tell which can was hit. |
-| Lights | One WS2812 per hole, over SPI with a 74AHCT125 level shifter, mounted on the back of the wood or rim, not the can bottom |
-| Dev machine | x86_64 Linux (Omarchy on a T2 MacBook Pro). QEMU runs under software emulation. |
-| Wireless | The Pi hosts a WiFi access point. Bluetooth is a stretch goal. |
+| Item               | Decision                                                                                                                                                                        |
+|--------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Target board       | Raspberry Pi Zero 2 W (aarch64, 512 MB RAM, WiFi/BT)                                                                                                                            |
+| Dev board          | Raspberry Pi 3 (same Cortex-A53 family). Board is a build variable: `BOARD=rpi3 \| rpizero2w`                                                                                   |
+| Boot chain         | Pi ROM and GPU firmware (closed, unchangeable), then **U-Boot**, then Linux. The "loader" is U-Boot plus a LOADER-style command layer.                                          |
+| Fallback mechanism | U-Boot `bootcount` / `bootlimit` / `altbootcmd`                                                                                                                                 |
+| OS build system    | Buildroot, run inside a Podman/Docker container                                                                                                                                 |
+| Update mechanism   | RAUC (or SWUpdate, to be confirmed in Part A/H) for signed bundles and atomic slot writes. The Rust app is the scheduler/downloader.                                            |
+| Update host        | GitHub Releases (public repo). Stable URL: `releases/latest/download/manifest.json`. Beta channel via a rolling tag such as `channel-beta`.                                     |
+| Language           | Rust, cross-compiled to `aarch64-unknown-linux-gnu`                                                                                                                             |
+| Projectile         | Airsoft 6 mm BBs                                                                                                                                                                |
+| Targets            | 10 holes (2×5), configurable `N`. Each is a steel can on the back of a wood face.                                                                                               |
+| Hit sensing        | One piezo disc per can, read through MCP3008 ADC(s) over SPI. Replaces the original single-microphone idea, because a mic hears the gun shot and cannot tell which can was hit. |
+| Lights             | One WS2812 per hole, over SPI with a 74AHCT125 level shifter, mounted on the back of the wood or rim, not the can bottom                                                        |
+| Dev machine        | x86_64 Linux (Omarchy on a T2 MacBook Pro). QEMU runs under software emulation.                                                                                                 |
+| Wireless           | The Pi hosts a WiFi access point. Bluetooth is a stretch goal.                                                                                                                  |
 
 ## 0.4 Assumptions to revisit
 
@@ -63,13 +63,15 @@ These are the seams between parts. Changing one means updating every part that t
 
 ### Boot environment variables (Parts A, B, H) - provisional
 
-| Variable                 | Meaning                                       |
-|--------------------------|-----------------------------------------------|
-| `boot_slot`              | Slot to boot next: `a` or `b` (the "primary") |
-| `slot_a_ok`, `slot_b_ok` | Whether each slot has been confirmed healthy  |
-| `upgrade_available`      | `1` while a newly written slot is on trial    |
-| `bootcount`              | Incremented by U-Boot each boot attempt       |
-| `bootlimit`              | Max attempts before `altbootcmd` runs         |
+| Variable                     | Meaning                                                                                   |
+|------------------------------|-------------------------------------------------------------------------------------------|
+| `BOOT_ORDER`                 | Space-separated slot order, e.g. `A B`. First entry is primary, second is backup.         |
+| `BOOT_A_LEFT`, `BOOT_B_LEFT` | Boot attempts remaining for each slot. Reset to 3 by the OS when it confirms a good boot. |
+| `boot_slot`                  | Slot to boot next: `a` or `b` (the "primary")                                             |
+| `slot_a_ok`, `slot_b_ok`     | Whether each slot has been confirmed healthy                                              |
+| `upgrade_available`          | `1` while a newly written slot is on trial                                                |
+| `bootcount`                  | Incremented by U-Boot each boot attempt                                                   |
+| `bootlimit`                  | Max attempts before `altbootcmd` runs                                                     |
 
 *Note:* RAUC's native U-Boot integration uses `BOOT_ORDER` and `BOOT_A_LEFT` / `BOOT_B_LEFT`. Part A must decide whether to adopt those names instead. The names above are provisional until then.
 
@@ -141,14 +143,14 @@ JSON with `version`, `channel`, `bundle_url`, `sha256`, `min_version`, `released
 
 # 1. Phases and milestones
 
-| Phase | Name | Parts | Exit criteria |
-|---|---|---|---|
-| 0 | Foundations | - | Repo skeleton, Rust workspace builds, cross-compile to aarch64 works, container dev setup documented |
-| 1 | Three parallel tracks | C, D+F, A | **C:** bench program lights a target and prints reaction time from a real BB hit. **D+F:** full 1v1 game playable in a terminal with mock hardware. **A:** in QEMU, a forced-bad slot B auto-reverts to A. |
-| 2 | Real image | B (+A on hardware) | Boots from SD on real hardware. `printenv`, `boot_image2`, and bad-image fallback all work. Serial console available. |
-| 3 | Integration | E, G | Phone joins the Pi's WiFi AP and plays a full game on real hardware |
-| 4 | OTA | H | Push a release to GitHub, the device updates itself and survives a deliberately broken release |
-| 5 | Field testing | - | Scoring tuned, noise rejection verified, enclosure built, power-loss soak test passed |
+| Phase | Name                  | Parts              | Exit criteria                                                                                                                                                                                              |
+|-------|-----------------------|--------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 0     | Foundations           | -                  | Repo skeleton, Rust workspace builds, cross-compile to aarch64 works, container dev setup documented                                                                                                       |
+| 1     | Three parallel tracks | C, D+F, A          | **C:** bench program lights a target and prints reaction time from a real BB hit. **D+F:** full 1v1 game playable in a terminal with mock hardware. **A:** in QEMU, a forced-bad slot B auto-reverts to A. |
+| 2     | Real image            | B (+A on hardware) | Boots from SD on real hardware. `printenv`, `boot_image2`, and bad-image fallback all work. Serial console available.                                                                                      |
+| 3     | Integration           | E, G               | Phone joins the Pi's WiFi AP and plays a full game on real hardware                                                                                                                                        |
+| 4     | OTA                   | H                  | Push a release to GitHub, the device updates itself and survives a deliberately broken release                                                                                                             |
+| 5     | Field testing         | -                  | Scoring tuned, noise rejection verified, enclosure built, power-loss soak test passed                                                                                                                      |
 
 **Why this order:** hit detection (Part C) is the largest technical risk and the game depends on it, so it is validated first. The game engine (Part F) is pure logic and can start immediately. Part A can be fully tested in QEMU without hardware.
 
